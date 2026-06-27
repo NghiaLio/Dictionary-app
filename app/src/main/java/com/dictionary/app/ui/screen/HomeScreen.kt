@@ -1,18 +1,10 @@
 package com.dictionary.app.ui.screen
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,19 +15,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,8 +28,12 @@ import com.dictionary.app.ui.component.SearchBar
 import com.dictionary.app.ui.component.SuggestionItem
 import com.dictionary.app.ui.component.WordOfTheDayCard
 import com.dictionary.app.ui.component.SuggestionWordSkeleton
+import com.dictionary.app.util.SpeechToTextHelper
 import com.dictionary.app.viewmodel.DictionaryViewModel
 import com.dictionary.app.viewmodel.WordOfTheDayViewModel
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 @Composable
 fun HomeScreen(
@@ -56,6 +45,30 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val historyList by viewModel.recentSearches.collectAsState()
     val dailyWordState by wordOfTheDayViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    
+    var isListening by remember { mutableStateOf(false) }
+    
+    val sttHelper = remember {
+        SpeechToTextHelper(
+            context = context,
+            onResult = { text -> viewModel.onQueryChange(text) },
+            onListeningStateChange = { listening -> isListening = listening },
+            onError = { /* Handle error */ }
+        )
+    }
+    
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            sttHelper.startListening("en")
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { sttHelper.destroy() }
+    }
 
     Column(
         modifier = modifier
@@ -88,6 +101,18 @@ fun HomeScreen(
             onSearch = { word ->
                 onNavigateToDetail(word, true)
             },
+            onMicClick = {
+                if (isListening) {
+                    sttHelper.stopListening()
+                } else {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        sttHelper.startListening("en")
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                }
+            },
+            isListening = isListening,
             modifier = Modifier.padding(horizontal = 8.dp)
         )
 

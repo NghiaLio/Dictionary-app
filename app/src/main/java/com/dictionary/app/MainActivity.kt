@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -129,8 +130,7 @@ fun MainScreen(
 
     val showBottomBar = currentRoute == Screen.Home.route || 
             currentRoute == Screen.SavedWords.route || 
-            currentRoute == Screen.Settings.route ||
-            currentRoute == Screen.Translation.route
+            currentRoute == Screen.Settings.route
 
     val navigationItems = listOf(
         NavigationItem(
@@ -155,9 +155,11 @@ fun MainScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = showBottomBar,
+        gesturesEnabled = showBottomBar || currentRoute == Screen.Translation.route || currentRoute == Screen.FlashCard.route,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                modifier = Modifier.fillMaxWidth(0.6f)
+            ) {
                 Spacer(Modifier.height(12.dp))
                 Text(
                     "Linguist AI",
@@ -213,8 +215,15 @@ fun MainScreen(
                 )
                 NavigationDrawerItem(
                     label = { Text("FlashCards") },
-                    selected = false,
-                    onClick = { /* Navigate to FlashCards */ },
+                    selected = currentRoute == Screen.FlashCard.route,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(Screen.FlashCard.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                     icon = { Icon(Icons.Default.Quiz, null) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
@@ -239,11 +248,12 @@ fun MainScreen(
     ) {
         Scaffold(
             topBar = {
-                if (showBottomBar || currentRoute == Screen.Translation.route) {
+                if (showBottomBar || currentRoute == Screen.Translation.route || currentRoute == Screen.FlashCard.route) {
                     val title = when (currentRoute) {
                         Screen.Settings.route -> "Settings"
                         Screen.SavedWords.route -> "Saved Words"
                         Screen.Translation.route -> "Translation"
+                        Screen.FlashCard.route -> "FlashCards"
                         else -> "Linguist AI"
                     }
                     CenterAlignedTopAppBar(

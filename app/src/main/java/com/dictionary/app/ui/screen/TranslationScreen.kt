@@ -1,11 +1,13 @@
 package com.dictionary.app.ui.screen
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -17,12 +19,19 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.*
 import android.widget.Toast
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.dictionary.app.util.SpeechToTextHelper
 import com.dictionary.app.util.TtsHelper
 import com.dictionary.app.viewmodel.TranslationViewModel
 
@@ -36,14 +45,21 @@ fun TranslationScreen(
     
     // Initialize TTS Helper
     val ttsHelper = remember { TtsHelper(context) }
-    
-    // Cleanup TTS on dispose
-    DisposableEffect(Unit) {
-        onDispose {
-            ttsHelper.shutdown()
-        }
+
+    var isListening by remember { mutableStateOf(false) }
+
+    // Initialize STT Helper
+    val sttHelper = remember {
+        SpeechToTextHelper(
+            context = context,
+            onResult = { text -> viewModel.onSourceTextChange(text) },
+            onListeningStateChange = { listening -> isListening = listening },
+            onError = { error ->
+                Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+            }
+        )
     }
-    
+
     val languages = listOf(
         Language("English", "en"),
         Language("Vietnamese", "vi"),
@@ -53,9 +69,37 @@ fun TranslationScreen(
         Language("Korean", "ko"),
         Language("German", "de")
     )
-    
+
     var sourceLang by remember { mutableStateOf(languages[0]) }
     var targetLang by remember { mutableStateOf(languages[1]) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            sttHelper.startListening(sourceLang.code)
+        }
+    }
+    
+    // Cleanup on dispose
+    DisposableEffect(Unit) {
+        onDispose {
+            ttsHelper.shutdown()
+            sttHelper.destroy()
+        }
+    }
+
+    // Mic pulsing animation
+    val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
+    val micScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
     
     var sourceExpanded by remember { mutableStateOf(false) }
     var targetExpanded by remember { mutableStateOf(false) }
@@ -196,8 +240,32 @@ fun TranslationScreen(
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    IconButton(
+                        onClick = {
+                            if (isListening) {
+                                sttHelper.stopListening()
+                            } else {
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                    sttHelper.startListening(sourceLang.code)
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            }
+                        },
+                        modifier = Modifier.then(
+                            if (isListening) Modifier.scale(micScale) else Modifier
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Voice Input",
+                            tint = if (isListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                    }
+
                     IconButton(onClick = { 
                         if (uiState.sourceText.isNotBlank()) {
                             ttsHelper.speak(uiState.sourceText, sourceLang.code)

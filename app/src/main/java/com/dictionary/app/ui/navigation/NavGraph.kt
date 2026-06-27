@@ -14,6 +14,7 @@ import com.dictionary.app.ui.screen.SavedWordsScreen
 import com.dictionary.app.ui.screen.WordDetailScreen
 import com.dictionary.app.ui.screen.SettingsScreen
 import com.dictionary.app.ui.screen.TranslationScreen
+import com.dictionary.app.ui.screen.FlashCardScreen
 import com.dictionary.app.viewmodel.DictionaryViewModel
 import com.dictionary.app.viewmodel.SavedWordsViewModel
 import com.dictionary.app.viewmodel.WordOfTheDayViewModel
@@ -66,6 +67,13 @@ fun NavGraph(
 
         composable(route = Screen.Translation.route) {
             TranslationScreen(viewModel = translationViewModel)
+        }
+
+        composable(route = Screen.FlashCard.route) {
+            FlashCardScreen(
+                viewModel = savedWordsViewModel,
+                onBackClick = { navController.navigateUp() }
+            )
         }
         
         composable(
