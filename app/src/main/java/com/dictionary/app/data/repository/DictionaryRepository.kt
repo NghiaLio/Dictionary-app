@@ -9,6 +9,10 @@ import com.dictionary.app.data.local.entity.CachedWordEntity
 import com.dictionary.app.data.remote.api.DictionaryApi
 import com.dictionary.app.data.remote.api.DatamuseApi
 import com.dictionary.app.data.remote.api.GeminiApi
+import com.dictionary.app.data.remote.api.ApiNinjasApi
+import com.dictionary.app.data.remote.api.TranslationApi
+import com.dictionary.app.data.remote.api.TranslationRequest
+import com.dictionary.app.data.remote.api.RetrofitInstance
 import com.dictionary.app.data.remote.dto.WordDto
 import com.dictionary.app.data.remote.dto.GeminiRequest
 import com.dictionary.app.data.remote.dto.GeminiContent
@@ -28,12 +32,14 @@ class DictionaryRepository(
     private val geminiApi: GeminiApi,
     private val savedWordDao: SavedWordDao,
     private val recentSearchDao: RecentSearchDao,
-    private val cachedWordDao: CachedWordDao
+    private val cachedWordDao: CachedWordDao,
+    private val apiNinjasApi: ApiNinjasApi = RetrofitInstance.apiNinjasApi,
+    private val translationApi: TranslationApi = RetrofitInstance.translationApi
 ) {
     private val gson = Gson()
 
     // 1. Fetch word definition: Checks offline cache first, falls back to API and caches the response.
-    suspend fun getWordResult(word: String): Result<WordResult> {
+    suspend fun getWordResult(word: String, saveToHistory: Boolean = true): Result<WordResult> {
         val query = word.trim().lowercase()
         if (query.isBlank()) return Result.failure(Exception("Query is empty."))
 
@@ -45,7 +51,9 @@ class DictionaryRepository(
                 val dtoList: List<WordDto> = gson.fromJson(cached.jsonData, listType)
                 if (dtoList.isNotEmpty()) {
                     val wordResult = dtoList.first().toWordResult()
-                    insertRecentSearch(wordResult.word)
+                    if (saveToHistory) {
+                        insertRecentSearch(wordResult.word)
+                    }
                     return Result.success(wordResult)
                 }
             }
@@ -65,7 +73,9 @@ class DictionaryRepository(
                     CachedWordEntity(word = query, jsonData = jsonString)
                 )
                 
-                insertRecentSearch(wordResult.word)
+                if (saveToHistory) {
+                    insertRecentSearch(wordResult.word)
+                }
                 Result.success(wordResult)
             } else {
                 Result.failure(Exception("Word not found."))
@@ -157,16 +167,14 @@ class DictionaryRepository(
         return try {
             lastAiRequestTime = System.currentTimeMillis()
             val request = GeminiRequest(
-                contents = listOf(
-                    GeminiContent(
-                        parts = listOf(
-                            GeminiPart(text = prompt)
-                        )
-                    )
-                )
+                model = "gemini-3.5-flash",
+                input = prompt
             )
             val response = geminiApi.generateContent(apiKey, request)
-            val responseText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+            
+            // Log response text để debug nếu cần
+            val responseText = response.text ?: response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+
             if (!responseText.isNullOrBlank()) {
                 // Save to local cache
                 cachedWordDao.insertCachedWord(
@@ -219,5 +227,38 @@ class DictionaryRepository(
 
     suspend fun clearRecentSearches() {
         recentSearchDao.clearRecentSearches()
+    }
+
+    // 5. Fetch a random word from Api-Ninjas
+    suspend fun getRandomWordFromApiNinjas(): Result<List<String>> {
+        return try {
+            val response = apiNinjasApi.getRandomWord()
+            Result.success(response)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 6. Google Translate API integration
+    suspend fun translateText(
+        text: String,
+        from: String,
+        to: String
+    ): Result<String> {
+        if (text.isBlank()) return Result.failure(Exception("Vui lòng nhập văn bản cần dịch."))
+        
+        return try {
+            val apiKey = "fce549c634mshb4dd43b92ece344p1be889jsnca457e5eec5e"
+            val request = TranslationRequest(from = from, to = to, text = text)
+            val response = translationApi.translate(apiKey = apiKey, request = request)
+            
+            if (response.trans.isNotBlank()) {
+                Result.success(response.trans)
+            } else {
+                Result.failure(Exception("Không nhận được nội dung dịch."))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Lỗi dịch thuật: ${e.localizedMessage ?: "Unknown error"}"))
+        }
     }
 }

@@ -12,12 +12,13 @@ import androidx.navigation.navArgument
 import com.dictionary.app.ui.screen.HomeScreen
 import com.dictionary.app.ui.screen.SavedWordsScreen
 import com.dictionary.app.ui.screen.WordDetailScreen
-import com.dictionary.app.ui.screen.WordOfTheDayScreen
 import com.dictionary.app.ui.screen.SettingsScreen
+import com.dictionary.app.ui.screen.TranslationScreen
 import com.dictionary.app.viewmodel.DictionaryViewModel
 import com.dictionary.app.viewmodel.SavedWordsViewModel
 import com.dictionary.app.viewmodel.WordOfTheDayViewModel
 import com.dictionary.app.viewmodel.SettingsViewModel
+import com.dictionary.app.viewmodel.TranslationViewModel
 
 @Composable
 fun NavGraph(
@@ -26,6 +27,7 @@ fun NavGraph(
     savedWordsViewModel: SavedWordsViewModel,
     wordOfTheDayViewModel: WordOfTheDayViewModel,
     settingsViewModel: SettingsViewModel,
+    translationViewModel: TranslationViewModel,
     modifier: Modifier = Modifier
 ) {
     NavHost(
@@ -34,15 +36,14 @@ fun NavGraph(
         modifier = modifier
     ) {
         composable(route = Screen.Home.route) {
-            val apiKey = settingsViewModel.geminiApiKey.collectAsState().value
-            LaunchedEffect(apiKey) {
-                wordOfTheDayViewModel.loadWordOfTheDay(apiKey)
+            LaunchedEffect(Unit) {
+                wordOfTheDayViewModel.loadWordOfTheDay()
             }
             HomeScreen(
                 viewModel = dictionaryViewModel,
                 wordOfTheDayViewModel = wordOfTheDayViewModel,
-                onNavigateToDetail = { word ->
-                    navController.navigate(Screen.WordDetail.createRoute(word))
+                onNavigateToDetail = { word, saveHistory ->
+                    navController.navigate(Screen.WordDetail.createRoute(word, saveHistory))
                 }
             )
         }
@@ -50,8 +51,8 @@ fun NavGraph(
         composable(route = Screen.SavedWords.route) {
             SavedWordsScreen(
                 viewModel = savedWordsViewModel,
-                onNavigateToDetail = { word ->
-                    navController.navigate(Screen.WordDetail.createRoute(word))
+                onNavigateToDetail = { word, saveHistory ->
+                    navController.navigate(Screen.WordDetail.createRoute(word, saveHistory))
                 }
             )
         }
@@ -62,21 +63,30 @@ fun NavGraph(
                 viewModel = settingsViewModel
             )
         }
+
+        composable(route = Screen.Translation.route) {
+            TranslationScreen(viewModel = translationViewModel)
+        }
         
         composable(
             route = Screen.WordDetail.route,
             arguments = listOf(
-                navArgument("word") { type = NavType.StringType }
+                navArgument("word") { type = NavType.StringType },
+                navArgument("saveHistory") { 
+                    type = NavType.BoolType
+                    defaultValue = true
+                }
             )
         ) { backStackEntry ->
             val word = backStackEntry.arguments?.getString("word") ?: ""
+            val saveHistory = backStackEntry.arguments?.getBoolean("saveHistory") ?: true
             val apiKey = settingsViewModel.geminiApiKey.collectAsState().value
 
             // Sync API Key to DictionaryViewModel so AI requests work in WordDetailScreen
             LaunchedEffect(word, apiKey) {
                 dictionaryViewModel.geminiApiKey = apiKey
                 if (word.isNotBlank()) {
-                    dictionaryViewModel.searchWord(word)
+                    dictionaryViewModel.searchWord(word, saveHistory)
                 }
             }
 

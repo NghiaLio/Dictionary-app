@@ -27,6 +27,9 @@ class ViewModelFactory(
             modelClass.isAssignableFrom(SettingsViewModel::class.java) -> {
                 SettingsViewModel(application, settingsDataStore) as T
             }
+            modelClass.isAssignableFrom(TranslationViewModel::class.java) -> {
+                TranslationViewModel(repository) as T
+            }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }

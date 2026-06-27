@@ -30,7 +30,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,10 +39,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.dictionary.app.ui.component.SearchBar
 import com.dictionary.app.ui.component.SuggestionItem
 import com.dictionary.app.ui.component.WordOfTheDayCard
+import com.dictionary.app.ui.component.SuggestionWordSkeleton
 import com.dictionary.app.viewmodel.DictionaryViewModel
 import com.dictionary.app.viewmodel.WordOfTheDayViewModel
 
@@ -51,7 +50,7 @@ import com.dictionary.app.viewmodel.WordOfTheDayViewModel
 fun HomeScreen(
     viewModel: DictionaryViewModel,
     wordOfTheDayViewModel: WordOfTheDayViewModel,
-    onNavigateToDetail: (String) -> Unit,
+    onNavigateToDetail: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -61,31 +60,35 @@ fun HomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(vertical = 8.dp)
     ) {
-        // Dictionary Title & Subtitle (static at top)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Dictionary",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Search words, meanings and examples",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Content with standard padding
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Dictionary",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Search words, meanings and examples",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Search Bar container (static at top)
+        // Search Bar with reduced horizontal padding to make it "longer"
         SearchBar(
             query = uiState.query,
             onQueryChange = { viewModel.onQueryChange(it) },
             onSearch = { word ->
-                onNavigateToDetail(word)
-            }
+                onNavigateToDetail(word, true)
+            },
+            modifier = Modifier.padding(horizontal = 8.dp)
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -95,6 +98,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .weight(1f)
+                .padding(horizontal = 16.dp)
         ) {
             when {
                 uiState.suggestions.isNotEmpty() -> {
@@ -111,7 +115,7 @@ fun HomeScreen(
                                     word = suggestion,
                                     onClick = {
                                         viewModel.clearSuggestions()
-                                        onNavigateToDetail(suggestion)
+                                        onNavigateToDetail(suggestion, true)
                                     }
                                 )
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -173,7 +177,7 @@ fun HomeScreen(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.clickable {
                                         viewModel.onQueryChange(suggestion)
-                                        onNavigateToDetail(suggestion)
+                                        onNavigateToDetail(suggestion, true)
                                     }
                                 )
                             }
@@ -199,7 +203,7 @@ fun HomeScreen(
                                         .background(MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(99.dp))
                                         .clickable {
                                             viewModel.onQueryChange(label)
-                                            onNavigateToDetail(label)
+                                            onNavigateToDetail(label, true)
                                         }
                                         .padding(horizontal = 16.dp, vertical = 8.dp)
                                 ) {
@@ -239,7 +243,7 @@ fun HomeScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                onNavigateToDetail(historyItem.word)
+                                                onNavigateToDetail(historyItem.word, true)
                                             }
                                             .padding(vertical = 12.dp, horizontal = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -282,9 +286,9 @@ fun HomeScreen(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        // Word of the Day Section
+                        // Suggestion Word Section
                         Text(
-                            text = "Word of the Day",
+                            text = "Suggestion Word",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
@@ -292,20 +296,30 @@ fun HomeScreen(
                         
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        if (dailyWordState.word.isNotBlank()) {
+                        if (dailyWordState.isLoading) {
+                            SuggestionWordSkeleton()
+                        } else if (dailyWordState.error != null) {
+                            // Show AI error if it occurred
+                            Text(
+                                text = "AI Error: ${dailyWordState.error}",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                        } else if (dailyWordState.word.isNotBlank()) {
                             WordOfTheDayCard(
                                 word = dailyWordState.word,
                                 phonetic = dailyWordState.phonetic,
                                 meaning = dailyWordState.meaning,
                                 example = dailyWordState.example,
-                                onClick = { onNavigateToDetail(dailyWordState.word) },
+                                onClick = { onNavigateToDetail(dailyWordState.word, false) },
                                 onPlayAudio = {
-                                    viewModel.playAudio(dailyWordState.phonetic) // playing audio using phonetic URL or standard view model
+                                    viewModel.playAudio(dailyWordState.audioUrl)
                                 }
                             )
                         } else {
                             Text(
-                                text = "Loading Word of the Day...",
+                                text = "Loading Suggestion Word...",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -55,4 +55,24 @@ object RetrofitInstance {
             .build()
             .create(GeminiApi::class.java)
     }
+
+    // 4. Api-Ninjas Client (Random Word)
+    val apiNinjasApi: ApiNinjasApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(ApiNinjasApi.BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+            .create(ApiNinjasApi::class.java)
+    }
+
+    // 5. Translation API Client
+    val translationApi: TranslationApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(TranslationApi.BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+            .create(TranslationApi::class.java)
+    }
 }

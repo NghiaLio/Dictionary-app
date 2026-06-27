@@ -4,24 +4,24 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dictionary.app.data.repository.DictionaryRepository
-import com.dictionary.app.data.remote.dto.GeminiRequest
-import com.dictionary.app.data.remote.dto.GeminiContent
-import com.dictionary.app.data.remote.dto.GeminiPart
-import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 data class WordOfTheDayUiState(
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true, // Start with true to avoid flashing local data
     val word: String = "",
     val phonetic: String? = null,
+    val audioUrl: String? = null,
     val meaning: String = "",
     val example: String = "",
     val relatedWords: List<String> = emptyList(),
@@ -59,33 +59,80 @@ class WordOfTheDayViewModel(
     )
 
     private var lastLoadedDate: String? = null
-    private var wasLoadedWithAi: Boolean = false
+    private var loadJob: Job? = null
 
-    fun loadWordOfTheDay(apiKey: String) {
+    fun loadWordOfTheDay() {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         
-        // Prevent redundant loading if already loaded for today
+        // Skip if already loaded successfully today
         if (lastLoadedDate == today) return
 
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             
-            // Exclusively use seeded local word list to preserve Gemini API quota
-            val seedIndex = Math.abs(today.hashCode()) % localWords.size
-            val localWord = localWords[seedIndex]
+            var success = false
+            var attempts = 0
+            val maxAttempts = 3
             
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    word = localWord.word,
-                    phonetic = localWord.phonetic,
-                    meaning = localWord.meaning,
-                    example = localWord.example,
-                    relatedWords = localWord.relatedWords ?: emptyList()
-                )
+            while (!success && attempts < maxAttempts && isActive) {
+                attempts++
+                try {
+                    val randomWordResult = repository.getRandomWordFromApiNinjas()
+                    if (randomWordResult.isSuccess) {
+                        val word = randomWordResult.getOrNull()?.firstOrNull()?.trim()
+                        if (!word.isNullOrBlank()) {
+                            val wordDetails = repository.getWordResult(word, saveToHistory = false)
+                            if (wordDetails.isSuccess) {
+                                val detail = wordDetails.getOrThrow()
+                                val firstMeaning = detail.meanings.firstOrNull()
+                                val firstDef = firstMeaning?.definitions?.firstOrNull()
+                                
+                                val synonyms = detail.meanings.flatMap { m ->
+                                    m.definitions.flatMap { d -> d.synonyms }
+                                }.distinct().take(5)
+
+                                _uiState.update {
+                                    it.copy(
+                                        isLoading = false,
+                                        word = detail.word,
+                                        phonetic = detail.phonetic,
+                                        audioUrl = detail.audioUrl,
+                                        meaning = firstDef?.definition ?: "No definition found",
+                                        example = firstDef?.example ?: "",
+                                        relatedWords = synonyms,
+                                        error = null
+                                    )
+                                }
+                                success = true
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Try next attempt
+                }
             }
+
+            // Fallback to local if all API attempts failed
+            if (!success && isActive) {
+                val seedIndex = Math.abs(today.hashCode()) % localWords.size
+                val localWord = localWords[seedIndex]
+                
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        word = localWord.word,
+                        phonetic = localWord.phonetic,
+                        audioUrl = null,
+                        meaning = localWord.meaning,
+                        example = localWord.example,
+                        relatedWords = localWord.relatedWords ?: emptyList(),
+                        error = null
+                    )
+                }
+            }
+            
             lastLoadedDate = today
-            wasLoadedWithAi = false
         }
     }
 }

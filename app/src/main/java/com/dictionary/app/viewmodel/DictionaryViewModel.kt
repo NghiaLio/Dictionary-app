@@ -95,7 +95,7 @@ class DictionaryViewModel(
         _uiState.update { it.copy(suggestions = emptyList()) }
     }
 
-    fun searchWord(word: String) {
+    fun searchWord(word: String, saveToHistory: Boolean = true) {
         val query = word.trim()
         if (query.isBlank()) return
 
@@ -119,7 +119,7 @@ class DictionaryViewModel(
             }
             _aiState.update { AiUiState() } // Clear previous AI states
 
-            val result = repository.getWordResult(query)
+            val result = repository.getWordResult(query, saveToHistory)
             
             result.onSuccess { wordResult ->
                 _uiState.update {

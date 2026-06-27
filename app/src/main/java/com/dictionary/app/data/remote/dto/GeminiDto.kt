@@ -3,7 +3,18 @@ package com.dictionary.app.data.remote.dto
 import com.google.gson.annotations.SerializedName
 
 data class GeminiRequest(
-    @SerializedName("contents") val contents: List<GeminiContent>
+    @SerializedName("model") val model: String,
+    @SerializedName("input") val input: String
+)
+
+data class GeminiResponse(
+    @SerializedName("text") val text: String?,
+    @SerializedName("candidates") val candidates: List<GeminiCandidate>?,
+    @SerializedName("error") val error: GeminiError?
+)
+
+data class GeminiCandidate(
+    @SerializedName("content") val content: GeminiContent?
 )
 
 data class GeminiContent(
@@ -14,10 +25,7 @@ data class GeminiPart(
     @SerializedName("text") val text: String
 )
 
-data class GeminiResponse(
-    @SerializedName("candidates") val candidates: List<GeminiCandidate>?
-)
-
-data class GeminiCandidate(
-    @SerializedName("content") val content: GeminiContent?
+data class GeminiError(
+    @SerializedName("message") val message: String?,
+    @SerializedName("code") val code: Int?
 )

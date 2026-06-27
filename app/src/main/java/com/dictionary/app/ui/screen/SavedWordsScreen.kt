@@ -52,7 +52,7 @@ import com.dictionary.app.viewmodel.SavedWordsViewModel
 @Composable
 fun SavedWordsScreen(
     viewModel: SavedWordsViewModel,
-    onNavigateToDetail: (String) -> Unit,
+    onNavigateToDetail: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val savedWordsList by viewModel.savedWords.collectAsState()
@@ -113,7 +113,7 @@ fun SavedWordsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(28.dp),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -204,7 +204,7 @@ fun SavedWordsScreen(
                     items(savedWordsList) { word ->
                         WordItem(
                             savedWord = word,
-                            onClick = { onNavigateToDetail(word.word) },
+                            onClick = { onNavigateToDetail(word.word, true) },
                             onFavoriteToggle = { viewModel.toggleFavorite(word) },
                             onDelete = { viewModel.deleteWord(word) },
                             onPlayAudio = { viewModel.playAudio(word.audioUrl) }
